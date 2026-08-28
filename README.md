@@ -22,17 +22,17 @@ pnpm build
 
 ```bash
 # Run a coding task
-bankai "fix the login form validation bug"
+pnpm bankai "fix the login form validation bug"
 
 # Run with a specific model
-bankai --model gpt-4o "refactor auth.ts"
+pnpm bankai --model gpt-4o "refactor auth.ts"
 
 # Run the eval suite
-bankai --eval
+pnpm bankai --eval
 # or: pnpm test
 
 # Get help
-bankai --help
+pnpm bankai --help
 ```
 
 ## CLI Flags
