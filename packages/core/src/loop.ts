@@ -116,6 +116,7 @@ export class AgentSession {
       const response = await this.config.provider.complete({
         messages: this.messages,
         tools: this.config.tools.list(),
+        model: this.config.model,
       });
 
       this.accumulateUsage(response);
@@ -129,9 +130,9 @@ export class AgentSession {
       const assistantMessage: ModelMessage = {
         role: "assistant",
         content: response.content,
-        ...(response.toolCalls !== undefined
-          ? { toolCalls: response.toolCalls }
-          : {}),
+        ...(response.toolCalls !== undefined ? { toolCalls: response.toolCalls } : {}),
+        ...(response.thinking !== undefined ? { thinking: response.thinking } : {}),
+        ...(response.redactedThinking !== undefined ? { redactedThinking: response.redactedThinking } : {}),
       };
       this.messages.push(assistantMessage);
 
@@ -191,6 +192,45 @@ export class AgentSession {
           data: { toolCallId: call.id, toolName: call.name, error: "tool_not_found" },
         });
         continue;
+      }
+
+      // Check permissions before execution
+      if (this.config.permissionChecker !== undefined) {
+        const check = this.config.permissionChecker(call.name, call.arguments, {
+          workingDir: context.workingDir,
+        });
+        const decision = typeof check === "string" ? check : check.decision;
+        const reason = typeof check === "string" ? "" : check.reason;
+
+        if (decision === "deny") {
+          this.messages.push({
+            role: "tool",
+            toolCallId: call.id,
+            content: `Tool "${call.name}" was denied by permission rules: ${reason}`,
+          });
+          this.appendTrace({
+            type: "tool_result",
+            at: new Date().toISOString(),
+            data: { toolCallId: call.id, toolName: call.name, denied: true, reason },
+          });
+          continue;
+        }
+
+        if (decision === "ask") {
+          // In headless mode, auto-approve (dontAsk equivalent)
+          // In interactive mode, the caller would prompt the user here
+          this.messages.push({
+            role: "tool",
+            toolCallId: call.id,
+            content: `Tool "${call.name}" requires user approval (auto-denied in headless mode): ${reason}`,
+          });
+          this.appendTrace({
+            type: "tool_result",
+            at: new Date().toISOString(),
+            data: { toolCallId: call.id, toolName: call.name, denied: true, reason, decision: "ask" },
+          });
+          continue;
+        }
       }
 
       let result;

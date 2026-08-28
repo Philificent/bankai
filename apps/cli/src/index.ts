@@ -4,19 +4,20 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { AgentSession, type AgentConfig, type AgentResult } from "@bankai/core";
-import { DefaultCatalog } from "@bankai/tools";
-import { OpenAIProvider } from "./provider.js";
+import { DefaultCatalog, type ToolCall } from "@bankai/tools";
+import { GatewayRouter } from "@bankai/gateway";
+import type { GatewayConfig, ModelAlias } from "@bankai/gateway";
+import { PermissionStack, defaultPermissionConfig } from "@bankai/permissions";
 
 interface CliOptions {
   readonly task: string;
   readonly model: string;
   readonly workingDir: string;
-  readonly apiKey: string;
-  readonly apiUrl: string;
   readonly maxIterations: number;
   readonly maxTokens: number;
   readonly maxBudgetUSD: number;
   readonly idleTimeoutMs: number;
+  readonly dontAsk: boolean;
   readonly verbose: boolean;
 }
 
@@ -25,7 +26,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
   const flags: Record<string, string> = {};
   const positionals: string[] = [];
 
-  const booleanFlags = new Set(["verbose", "v", "help", "h"]);
+  const booleanFlags = new Set(["verbose", "v", "help", "h", "dont-ask", "dontAsk"]);
 
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
@@ -57,14 +58,13 @@ function parseArgs(argv: readonly string[]): CliOptions {
 
   return {
     task,
-    model: flags.model ?? env.BANKAI_MODEL ?? "gpt-4o",
+    model: flags.model ?? env.BANKAI_MODEL ?? "coding-primary",
     workingDir: flags["working-dir"] ?? env.BANKAI_WORKING_DIR ?? process.cwd(),
-    apiKey: flags["api-key"] ?? env.BANKAI_API_KEY ?? "",
-    apiUrl: flags["api-url"] ?? env.BANKAI_API_URL ?? "https://api.openai.com/v1",
     maxIterations: Number(flags["max-iterations"] ?? env.BANKAI_MAX_ITERATIONS ?? 50),
     maxTokens: Number(flags["max-tokens"] ?? env.BANKAI_MAX_TOKENS ?? 100000),
     maxBudgetUSD: Number(flags["max-budget"] ?? env.BANKAI_MAX_BUDGET_USD ?? 10),
     idleTimeoutMs: Number(flags["idle-timeout"] ?? env.BANKAI_IDLE_TIMEOUT_MS ?? 300000),
+    dontAsk: flags["dont-ask"] !== undefined || flags.dontAsk !== undefined,
     verbose: flags.verbose !== undefined || flags.v !== undefined,
   };
 }
@@ -79,6 +79,59 @@ function telemetry(level: "info" | "debug" | "error", event: string, data: Recor
   process.stderr.write(`${line}\n`);
 }
 
+function buildGatewayConfig(options: CliOptions): GatewayConfig {
+  const env = process.env;
+
+  const anthropicKey = env.BANKAI_ANTHROPIC_API_KEY ?? env.ANTHROPIC_API_KEY ?? "";
+  const openaiKey = env.BANKAI_OPENAI_API_KEY ?? env.OPENAI_API_KEY ?? env.BANKAI_API_KEY ?? "";
+
+  const aliases: ModelAlias[] = [
+    {
+      name: "coding-primary",
+      provider: "anthropic",
+      model: env.BANKAI_CODING_MODEL ?? "claude-3-5-sonnet-20241022",
+      costPer1MInputUSD: 15.0,
+      costPer1MOutputUSD: 75.0,
+    },
+    {
+      name: "cheap-compact",
+      provider: "openai",
+      model: env.BANKAI_COMPACT_MODEL ?? "gpt-4o-mini",
+      costPer1MInputUSD: 3.0,
+      costPer1MOutputUSD: 12.0,
+    },
+    {
+      name: "gpt-4o",
+      provider: "openai",
+      model: "gpt-4o",
+      costPer1MInputUSD: 3.0,
+      costPer1MOutputUSD: 15.0,
+    },
+  ];
+
+  return {
+    apiKeys: {
+      anthropic: anthropicKey,
+      openai: openaiKey,
+      "openai-compatible": openaiKey,
+    },
+    baseURLs: {
+      anthropic: "https://api.anthropic.com",
+      openai: "https://api.openai.com/v1",
+      "openai-compatible": "https://api.openai.com/v1",
+    },
+    aliases,
+    retry: {
+      maxRetries: 3,
+      baseBackoffMs: 1000,
+    },
+    budget: {
+      maxUSD: options.maxBudgetUSD,
+      maxTokens: options.maxTokens,
+    },
+  };
+}
+
 export async function main(argv: readonly string[]): Promise<AgentResult> {
   const options = parseArgs(argv);
   const workingDir = resolve(options.workingDir);
@@ -89,13 +142,33 @@ export async function main(argv: readonly string[]): Promise<AgentResult> {
     maxIterations: options.maxIterations,
     maxTokens: options.maxTokens,
     maxBudgetUSD: options.maxBudgetUSD,
+    dontAsk: options.dontAsk,
   });
 
-  const provider = new OpenAIProvider({
-    apiKey: options.apiKey,
-    baseURL: options.apiUrl,
-    model: options.model,
+  const gatewayConfig = buildGatewayConfig(options);
+  const provider = new GatewayRouter(gatewayConfig);
+  const toolCatalog = new DefaultCatalog();
+
+  telemetry("info", "bankai.provider", {
+    providerType: "gateway",
+    aliases: gatewayConfig.aliases.map((a) => a.name),
   });
+
+  // Create AGENTS.md if it doesn't exist so the constitution loads
+  const agentsPath = resolve(workingDir, "AGENTS.md");
+  try {
+    await readFile(agentsPath, "utf8");
+  } catch {
+    await mkdir(workingDir, { recursive: true });
+    await writeFile(
+      agentsPath,
+      "# Bankai — Project Constitution\n\nAdd project-specific conventions here.\n",
+      "utf8"
+    );
+  }
+
+  // Permission stack — deny rules run as code before any tool executes
+  const permissionStack = new PermissionStack(defaultPermissionConfig());
 
   const config: AgentConfig = {
     model: options.model,
@@ -104,42 +177,48 @@ export async function main(argv: readonly string[]): Promise<AgentResult> {
     maxTokens: options.maxTokens,
     maxBudgetUSD: options.maxBudgetUSD,
     idleTimeoutMs: options.idleTimeoutMs,
-    tools: new DefaultCatalog(),
+    tools: toolCatalog,
     provider,
+    permissionChecker: (toolName: string, params: Record<string, unknown>) => {
+      const tool = toolCatalog.get(toolName);
+      if (tool === undefined) {
+        return { decision: "deny" as const, reason: `Tool "${toolName}" not in catalog` };
+      }
+      const toolCall: ToolCall = {
+        id: `perm_${Date.now()}`,
+        name: toolName,
+        arguments: params,
+      };
+      const result = permissionStack.check(toolCall, tool, { workingDir, dontAsk: options.dontAsk });
+      const decision = result.decision;
+      if (decision === "allow") {
+        return "allow";
+      }
+      if (decision === "deny") {
+        return { decision: "deny" as const, reason: result.reason };
+      }
+      // "ask" in headless/dontAsk mode → auto-approve
+      if (options.dontAsk) {
+        return "allow";
+      }
+      return { decision: "ask" as const, reason: result.reason };
+    },
   };
 
   const session = new AgentSession(config);
-
-  if (options.verbose) {
-    // Write AGENTS.md if it doesn't exist, so the constitution loads
-    const agentsPath = resolve(workingDir, "AGENTS.md");
-    try {
-      await readFile(agentsPath, "utf8");
-    } catch {
-      await mkdir(workingDir, { recursive: true });
-      await writeFile(
-        agentsPath,
-        "# Bankai — Project Constitution\n\nAdd project-specific conventions here.\n",
-        "utf8"
-      );
-    }
-  }
-
   const result = await session.run(options.task);
 
   // Emit trace as JSONL to stderr
   for (const entry of result.trace) {
-    telemetry(
-      entry.type === "assistant" ? "debug" : "debug",
-      `trace.${entry.type}`,
-      entry.data
-    );
+    telemetry("debug", `trace.${entry.type}`, entry.data);
   }
 
   telemetry("info", "bankai.finish", {
     stopReason: result.stopReason,
     iterations: result.iterations,
     usage: result.usage,
+    spentUSD: provider.spentUSD,
+    spentTokens: provider.spentTokens,
   });
 
   // JSON result to stdout
@@ -150,6 +229,7 @@ export async function main(argv: readonly string[]): Promise<AgentResult> {
         output: result.output,
         usage: result.usage,
         iterations: result.iterations,
+        spentUSD: provider.spentUSD,
       },
       null,
       2

@@ -1,12 +1,15 @@
 {
-  "name": "@bankai/cli",
+  "name": "@bankai/gateway",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./src/index.ts",
-  "bin": {
-    "bankai": "./dist/index.js"
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -15,8 +18,6 @@
   },
   "dependencies": {
     "@bankai/core": "workspace:*",
-    "@bankai/gateway": "workspace:*",
-    "@bankai/permissions": "workspace:*",
     "@bankai/tools": "workspace:*"
   },
   "devDependencies": {

@@ -48,9 +48,22 @@ export interface AgentConfig {
   readonly tools: ToolCatalog;
   /** Model provider to call for completions. */
   readonly provider: ModelProvider;
+  /** Optional permission checker for tool execution. */
+  readonly permissionChecker?: PermissionChecker;
   /** Optional system prompt prefix. If omitted, AGENTS.md is loaded. */
   readonly systemPrompt?: string;
 }
+
+export interface ToolPermissionResult {
+  readonly decision: "allow" | "deny" | "ask";
+  readonly reason: string;
+}
+
+export type PermissionChecker = (
+  toolName: string,
+  params: Record<string, unknown>,
+  context: { workingDir: string }
+) => ToolPermissionResult | "allow" | "deny";
 
 export interface AgentResult {
   readonly stopReason: AgentStopReason;
@@ -81,6 +94,8 @@ export interface ModelRequest {
   readonly messages: readonly ModelMessage[];
   /** Harness-native tool catalog. Provider projects into wire format. */
   readonly tools: readonly ToolDef[];
+  /** Logical model alias (e.g. "coding-primary") resolved by the gateway. */
+  readonly model: string;
   readonly temperature?: number;
   readonly maxTokens?: number;
 }
@@ -94,6 +109,10 @@ export interface ModelResponse {
     readonly outputTokens: number;
     readonly totalTokens: number;
   };
+  /** Anthropic thinking blocks — preserve across turns. */
+  readonly thinking?: readonly ThinkingBlock[];
+  /** Anthropic redacted thinking blocks — preserve across turns. */
+  readonly redactedThinking?: readonly RedactedThinkingBlock[];
 }
 
 export interface ProviderToolCall {
@@ -112,4 +131,19 @@ export interface ModelMessage {
   readonly toolCalls?: readonly ProviderToolCall[];
   /** For tool role — the ID of the tool call being resolved. */
   readonly toolCallId?: string;
+  /** Anthropic thinking blocks — must be passed back unmodified with tool results. */
+  readonly thinking?: readonly ThinkingBlock[];
+  /** Anthropic redacted thinking blocks. */
+  readonly redactedThinking?: readonly RedactedThinkingBlock[];
+}
+
+export interface ThinkingBlock {
+  readonly type: "thinking";
+  readonly thinking: string;
+  readonly signature?: string;
+}
+
+export interface RedactedThinkingBlock {
+  readonly type: "redacted_thinking";
+  readonly data: string;
 }

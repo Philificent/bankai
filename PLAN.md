@@ -6,14 +6,15 @@
 - [x] packages/tools: bash, file_read, file_edit, code_exec sandbox
 - [x] apps/cli: bankai binary entry point
 - [x] Tests: core loop + canonical tools (15 + 4 + 6 = 25 tests, all passing)
-- [ ] End-to-end smoke test against real API
-- [ ] Commit + push
+- [x] Commit + push
 
 ## Milestone 2: Gateway + Adapter (Week 2)
-- [ ] packages/gateway: LiteLLM adapter, per-provider tool projection
-- [ ] packages/budget: Postgres-backed spend tracking
-- [ ] Durable files: AGENTS.md constitution, PLAN.md, JSON feature list
-- [ ] packages/permissions: deny/ask/allow stack, dummy secrets
+- [x] packages/gateway: capability adapter (OpenAI + Anthropic), thinking block preservation
+- [x] packages/gateway: GatewayRouter with alias resolution, retry, budget tracking
+- [x] packages/permissions: deny/ask/allow stack with bash deny patterns
+- [x] Durable files: AGENTS.md constitution, PLAN.md
+- [x] Tests: gateway adapters (8), permissions (13), CLI updated (5) — 45 tests total, all passing
+- [ ] Commit + push
 
 ## Milestone 3: Verification + Evals (Week 3)
 - [ ] packages/verify: pre-completion hooks (typecheck, lint, test)

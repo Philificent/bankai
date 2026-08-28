@@ -10,6 +10,10 @@ export type {
   ModelResponse,
   ProviderToolCall,
   MessageRole,
+  ThinkingBlock,
+  RedactedThinkingBlock,
+  ToolPermissionResult,
+  PermissionChecker,
 } from "./types.js";
 
 export { AgentSession } from "./loop.js";
