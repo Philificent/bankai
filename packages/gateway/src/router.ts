@@ -70,6 +70,27 @@ export class GatewayRouter implements ModelProvider {
     // Resolve the model alias
     const alias = this.resolveAlias(request);
 
+    // Apply per-model tool profiles (Phase 10): filter tools to only
+    // those allowed for this model alias
+    let tools = request.tools;
+    const profile = this.config.toolProfiles?.[alias.name];
+    if (profile !== undefined && profile.length > 0) {
+      const allowed = new Set(profile);
+      tools = request.tools.filter((t: { name: string }) => allowed.has(t.name));
+    }
+
+    // Apply per-model prompt profile (Phase 10): override system prompt
+    let messages = request.messages;
+    const promptOverride = this.config.promptProfiles?.[alias.name];
+    if (promptOverride !== undefined && promptOverride.length > 0) {
+      messages = request.messages.map((m) => {
+        if (m.role === "system") {
+          return { ...m, content: promptOverride };
+        }
+        return m;
+      });
+    }
+
     // Get the adapter for this provider
     const adapter = this.adapters.get(alias.provider);
     if (adapter === undefined) {
@@ -77,7 +98,11 @@ export class GatewayRouter implements ModelProvider {
     }
 
     // Project the request into the provider's wire format
-    const projected = await adapter.project(request);
+    const projected = await adapter.project({
+      ...request,
+      tools,
+      messages,
+    });
 
     // Make the API call with retries
     const response = await this.callWithRetry(alias, adapter, projected, request);

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { resolve } from "node:path";
 
 import type { ToolDef, ToolResult, ToolParameters, ToolExecutionContext } from "./types.js";
 
@@ -238,5 +239,70 @@ function formatResult(out: ExecOutput): ToolResult {
     content,
     trusted: true,
     meta: { exitCode: out.exitCode ?? 0, timedOut: out.timedOut },
+  };
+}
+
+/**
+ * Phase 10: Create a sandboxed code_exec tool that runs code in a Docker
+ * container with workspace-write filesystem, no network, and no real credentials.
+ *
+ * Docker image: node:20-alpine (for JS/TS), python:3.12-alpine (for Python)
+ * Container flags: --read-only, --network none, --memory 512m, --rm
+ * Mount: workingDir -> /workspace (rw), everything else is read-only
+ *
+ * The sandbox implements the "workspace_write" preset from the report.
+ */
+export function createSandboxedCodeExecTool(workingDir: string): ToolDef {
+  const safeWorkingDir = resolve(workingDir);
+
+  return {
+    name: "code_exec",
+    description:
+      "Execute code in a Docker container with workspace-write access only. " +
+      "No network egress, no real credentials (dummy env values only). " +
+      "Supports TypeScript, JavaScript, Python, and Bash. Output is capped at 50KB. " +
+      "Use this for computations, data filtering, and scripting over tool outputs.",
+    parameters: CODE_EXEC_PARAMETERS,
+    risk: "safe",
+    executor: async (params: unknown, _context: ToolExecutionContext): Promise<ToolResult> => {
+      const validated = validateCodeExecParams(params);
+
+      let image: string;
+      let dockerCmd: string[];
+
+      switch (validated.language) {
+        case "bash":
+          image = "node:20-alpine";
+          dockerCmd = ["bash", "-c", validated.code];
+          break;
+        case "python":
+          image = "python:3.12-alpine";
+          dockerCmd = ["python3", "-c", validated.code];
+          break;
+        case "javascript":
+          image = "node:20-alpine";
+          dockerCmd = ["node", "--input-type=module", "-e", validated.code];
+          break;
+        case "typescript":
+        default:
+          image = "node:20-alpine";
+          dockerCmd = ["node", "--input-type=module", "-e", validated.code];
+          break;
+      }
+
+      const cmd = [
+        "docker", "run", "--rm",
+        "--read-only",
+        "--network", "none",
+        "--memory", "512m",
+        "--user", "nobody",
+        "-v", `${safeWorkingDir}:/workspace:rw`,
+        "-w", "/workspace",
+        image,
+        ...dockerCmd,
+      ];
+
+      return runCommand(cmd, "", validated.timeout_ms).then(formatResult);
+    },
   };
 }

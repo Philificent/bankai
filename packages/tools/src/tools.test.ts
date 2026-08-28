@@ -4,7 +4,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { bashTool, fileReadTool, fileEditTool, codeExecTool, DefaultCatalog } from "./index.js";
+import { bashTool, fileReadTool, fileEditTool, codeExecTool, createSandboxedCodeExecTool, DefaultCatalog } from "./index.js";
 import type { ToolExecutionContext, ToolResult } from "./types.js";
 
 let workDir: string;
@@ -170,5 +170,12 @@ describe("code_exec tool", () => {
     );
     assert.equal(result.type, "result");
     assert.match(result.content, /from_bash/);
+  });
+
+  it("createSandboxedCodeExecTool returns a tool with correct metadata", () => {
+    const tool = createSandboxedCodeExecTool("/tmp");
+    assert.equal(tool.name, "code_exec");
+    assert.equal(tool.risk, "safe");
+    assert.ok(tool.description.includes("Docker"));
   });
 });

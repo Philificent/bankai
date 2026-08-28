@@ -44,7 +44,16 @@ export interface GatewayConfig {
   readonly baseURLs: Readonly<Record<ProviderName, string>>;
   /** Model alias table: logical name → provider/model/cost. */
   readonly aliases: ReadonlyArray<ModelAlias>;
-  /** Retry policy. */
+  /**
+  * Model-specific tool profiles. Maps model alias name → allowed tool names.
+  * Enforces per-model tool allowlists so each provider gets only the tools
+  * it supports (Phase 10). Falls back to the full catalog if an alias
+  * is not listed here.
+  */
+ readonly toolProfiles?: Readonly<Record<string, readonly string[]>>;
+ /** Phase 10: Per-model system prompt overrides. Maps alias name → prompt. */
+ readonly promptProfiles?: Readonly<Record<string, string>>;
+ /** Retry policy. */
   readonly retry: {
     readonly maxRetries: number;
     readonly baseBackoffMs: number;

@@ -80,14 +80,17 @@
     "packages/verify": "3 tests",
     "packages/evals": "5 tests",
     "packages/graph": "3 tests",
-    "apps/cli": "8 tests"
+    "apps/cli": "10 tests"
   },
-  "totalTests": 65,
+  "totalTests": 68,
   "phase10Features": {
     "postgresBudgetTracker": true,
     "progressiveCompaction": true,
     "toolOutputCapping": true,
     "evalCLIIntegration": true,
-    "shortFlagParsing": true
+    "shortFlagParsing": true,
+    "sandboxedCodeExec": true,
+    "perModelToolProfiles": true,
+    "perModelPromptProfiles": true
   }
 }

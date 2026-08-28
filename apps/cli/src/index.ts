@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { AgentSession, type AgentConfig, type AgentResult, SkillLoader } from "@bankai/core";
-import { DefaultCatalog, type ToolCall } from "@bankai/tools";
+import { DefaultCatalog, createSandboxedCodeExecTool, defaultToolSet, type ToolCall } from "@bankai/tools";
 import { GatewayRouter } from "@bankai/gateway";
 import type { GatewayConfig, ModelAlias, AsyncBudgetTracker } from "@bankai/gateway";
 import { PostgresBudgetTracker } from "@bankai/gateway";
@@ -22,6 +22,7 @@ interface CliOptions {
   readonly dontAsk: boolean;
   readonly verbose: boolean;
   readonly evalMode: boolean;
+  readonly sandbox: boolean;
 }
 
 function parseArgs(argv: readonly string[]): CliOptions {
@@ -29,7 +30,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
   const flags: Record<string, string> = {};
   const positionals: string[] = [];
 
-  const booleanFlags = new Set(["verbose", "v", "help", "h", "dont-ask", "dontAsk", "eval", "e"]);
+  const booleanFlags = new Set(["verbose", "v", "help", "h", "dont-ask", "dontAsk", "eval", "e", "sandbox", "s"]);
 
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
@@ -71,6 +72,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
     dontAsk: flags["dont-ask"] !== undefined || flags.dontAsk !== undefined,
     verbose: flags.verbose !== undefined || flags.v !== undefined,
     evalMode: flags.eval !== undefined || flags.e !== undefined,
+    sandbox: flags.sandbox !== undefined || flags.s !== undefined,
   };
 }
 
@@ -126,6 +128,16 @@ function buildGatewayConfig(options: CliOptions): GatewayConfig {
       "openai-compatible": "https://api.openai.com/v1",
     },
     aliases,
+    // Per-model tool profiles: cheap models get a reduced tool set
+    toolProfiles: {
+      "cheap-compact": ["bash", "file_read", "file_edit"],
+    },
+    // Per-model prompt profiles: cheaper model gets a shorter, critique-focused prompt
+    promptProfiles: {
+      "cheap-compact":
+        "You are Bankai's critique agent. Review the code changes and the task spec. " +
+        "Focus on correctness, edge cases, and security. Keep your review under 3 sentences.",
+    },
     retry: {
       maxRetries: 3,
       baseBackoffMs: 1000,
@@ -167,7 +179,14 @@ export async function main(argv: readonly string[]): Promise<AgentResult | EvalR
   }
 
   const provider = new GatewayRouter(gatewayConfig, undefined, asyncBudget);
-  const toolCatalog = new DefaultCatalog();
+
+  // Use sandboxed code_exec when --sandbox is enabled
+  const toolCatalog = options.sandbox
+    ? new DefaultCatalog([
+        ...defaultToolSet().filter((t) => t.name !== "code_exec"),
+        createSandboxedCodeExecTool(workingDir),
+      ])
+    : new DefaultCatalog();
 
   // Load skills from the working directory's skills/ folder
   const skillsDir = resolve(workingDir, "skills");

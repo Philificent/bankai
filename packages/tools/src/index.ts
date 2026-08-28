@@ -19,6 +19,6 @@ export type { FileEditParams, FileEditOperation } from "./file_edit.js";
 export { fileEditTool } from "./file_edit.js";
 
 export type { CodeExecParams } from "./code_exec.js";
-export { codeExecTool } from "./code_exec.js";
+export { codeExecTool, createSandboxedCodeExecTool } from "./code_exec.js";
 
 export { DefaultCatalog, defaultToolSet } from "./catalog.js";

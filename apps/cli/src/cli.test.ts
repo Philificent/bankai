@@ -49,6 +49,18 @@ describe("parseArgs", () => {
   it("defaults evalMode to false", () => {
     const opts = parseArgs(["hello"]);
     assert.equal(opts.evalMode, false);
+    assert.equal(opts.sandbox, false);
+  });
+
+  it("parses --sandbox flag", () => {
+    const opts = parseArgs(["--sandbox", "deploy the app"]);
+    assert.equal(opts.sandbox, true);
+    assert.equal(opts.task, "deploy the app");
+  });
+
+  it("parses -s short flag", () => {
+    const opts = parseArgs(["-s", "deploy the app"]);
+    assert.equal(opts.sandbox, true);
   });
 
   it("throws on missing task", () => {

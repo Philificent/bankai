@@ -55,10 +55,18 @@
 - [x] apps/cli: JSONL trace output to stdout, telemetry to stderr
 - [x] apps/cli: auto-detect BANKAI_DATABASE_URL for persistent budgets
 
+### Sandbox + Per-Model Profiles (Phase 10)
+- [x] packages/tools: createSandboxedCodeExecTool (Docker container, workspace-write, no network)
+- [x] apps/cli: --sandbox/-s flag for OS-level isolation
+- [x] packages/gateway: per-model tool profiles (tool allowlist per alias)
+- [x] packages/gateway: per-model prompt profiles (system prompt override per alias)
+- [x] apps/cli: toolProfiles and promptProfiles wired into GatewayConfig
+
 ### Tests
 - [x] Core: tool output capping (1 test)
 - [x] Core: progressive compaction (1 test)
-- [x] CLI: --eval/-e flag parsing (3 tests), short-flag support (1 test)
-- [x] Total: 65 tests across 8 packages, 0 failures
+- [x] Tools: createSandboxedCodeExecTool metadata (1 test)
+- [x] CLI: --eval/-e flag parsing (3 tests), --sandbox/-s flag parsing (3 tests), total 10
+- [x] Total: 68 tests across 8 packages, 0 failures
 
 - [ ] Commit + push
