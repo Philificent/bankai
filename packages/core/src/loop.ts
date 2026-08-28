@@ -93,6 +93,64 @@ export class AgentSession {
     return null;
   }
 
+  /** Cap tool output to avoid context bloat (Phase 10 progressive compaction). */
+  private capToolOutput(content: string): string {
+    const max = this.config.maxToolOutputTokens ?? 0;
+    if (max > 0 && content.length > max) {
+      return `${content.slice(0, max)}\n\n[truncated — output exceeded ${max} characters]`;
+    }
+    return content;
+  }
+
+  /**
+   * Progressive compaction: summarize earlier conversation turns into a
+   * compact summary, preserving the system message (AGENTS.md) and recent
+   * turns for active context. Triggered when turn count exceeds
+   * compactionThreshold (Phase 10).
+   */
+  private compactMessages(): void {
+    const threshold = this.config.compactionThreshold ?? 0;
+    if (threshold <= 0 || this.messages.length <= threshold) {
+      return;
+    }
+    const preserve = this.config.compactionPreserveTurns ?? 10;
+
+    // Always preserve system message + initial user task
+    const system = this.messages[0];
+    if (system === undefined || system.role !== "system") {
+      return; // safety: no system message
+    }
+
+    const early = this.messages.slice(1, this.messages.length - preserve);
+    const recent = this.messages.slice(this.messages.length - preserve);
+
+    // Summarize earlier turns by concatenating and truncating
+    let summary = "";
+    for (const msg of early) {
+      if (msg.role === "assistant") {
+        summary += `Assistant: ${msg.content ?? ""}\n`;
+      } else if (msg.role === "tool") {
+        summary += `Tool: ${msg.content ?? ""}\n`;
+      }
+    }
+    const maxSummaryLen = 2000;
+    if (summary.length > maxSummaryLen) {
+      summary = `${summary.slice(0, maxSummaryLen)}\n[...earlier context truncated in compaction]`;
+    }
+
+    this.messages = [
+      system,
+      { role: "user", content: `[Earlier context compacted: ${early.length} message(s) summarized. Recent conversation preserved.]\n\n${summary}` },
+      ...recent,
+    ];
+
+    this.appendTrace({
+      type: "observation",
+      at: new Date().toISOString(),
+      data: { event: "compaction", summaryLength: summary.length, preservedTurns: recent.length },
+    });
+  }
+
   /** Run the agent loop for a single task. */
   async run(task: string): Promise<AgentResult> {
     const systemMessage = await this.buildSystemMessage();
@@ -163,6 +221,9 @@ export class AgentSession {
 
       // Execute tool calls and append results
       await this.executeToolCalls(toolCalls);
+
+      // Progressive compaction: compact if turn count exceeds threshold
+      this.compactMessages();
 
       // Check idle timeout after tool execution
       const idleStop = this.checkIdle();
@@ -245,10 +306,11 @@ export class AgentSession {
         };
       }
 
+      const capped = this.capToolOutput(result.content);
       this.messages.push({
         role: "tool",
         toolCallId: call.id,
-        content: result.content,
+        content: capped,
       });
 
       this.appendTrace({
@@ -258,7 +320,8 @@ export class AgentSession {
           toolCallId: call.id,
           toolName: call.name,
           resultType: result.type,
-          contentLength: result.content.length,
+          contentLength: capped.length,
+          originalLength: result.content.length,
         },
       });
 

@@ -35,6 +35,22 @@ describe("parseArgs", () => {
     assert.equal(opts.dontAsk, false);
   });
 
+  it("parses --eval flag", () => {
+    const opts = parseArgs(["--eval", "run tests"]);
+    assert.equal(opts.evalMode, true);
+    assert.equal(opts.task, "run tests");
+  });
+
+  it("parses -e short flag", () => {
+    const opts = parseArgs(["-e", "run tests"]);
+    assert.equal(opts.evalMode, true);
+  });
+
+  it("defaults evalMode to false", () => {
+    const opts = parseArgs(["hello"]);
+    assert.equal(opts.evalMode, false);
+  });
+
   it("throws on missing task", () => {
     assert.throws(() => parseArgs([]), /No task provided/);
   });

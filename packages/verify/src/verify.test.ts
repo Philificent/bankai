@@ -9,7 +9,7 @@ describe("Verifier", () => {
     assert.ok(verifier);
   });
 
-  it("runs checks and returns a report", async () => {
+  it("runs checks and returns a report", { timeout: 30000 }, async () => {
     const verifier = new Verifier({
       projectRoot: "/Users/phil/projects/bankai",
       checks: [
@@ -29,7 +29,7 @@ describe("Verifier", () => {
     assert.match(report.results[0]!.output, /hello/);
   });
 
-  it("detects failing checks", async () => {
+  it("detects failing checks", { timeout: 30000 }, async () => {
     const verifier = new Verifier({
       projectRoot: "/Users/phil/projects/bankai",
       checks: [

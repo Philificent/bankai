@@ -85,3 +85,17 @@ export interface BudgetTracker {
   readonly spentUSD: number;
   readonly spentTokens: number;
 }
+
+/**
+ * Async budget tracker for Postgres-backed persistence.
+ * The report notes: "Budgets require Postgres; without a DB, max_budget
+ * fails open." This interface persists charges across sessions.
+ */
+export interface AsyncBudgetTracker {
+  charge(tokens: { inputTokens: number; outputTokens: number }, costUSD: number): Promise<void>;
+  check(): Promise<{ exceeded: boolean; reason?: "max_tokens" | "max_budget" }>;
+  readonly spentUSD: number;
+  readonly spentTokens: number;
+  /** Release any resources (e.g., DB connection pool). */
+  close?(): Promise<void>;
+}

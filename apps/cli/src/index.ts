@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url";
 import { AgentSession, type AgentConfig, type AgentResult, SkillLoader } from "@bankai/core";
 import { DefaultCatalog, type ToolCall } from "@bankai/tools";
 import { GatewayRouter } from "@bankai/gateway";
-import type { GatewayConfig, ModelAlias } from "@bankai/gateway";
+import type { GatewayConfig, ModelAlias, AsyncBudgetTracker } from "@bankai/gateway";
+import { PostgresBudgetTracker } from "@bankai/gateway";
 import { PermissionStack, defaultPermissionConfig } from "@bankai/permissions";
+import { EvalRunner, defaultEvalCases, type EvalReport } from "@bankai/evals";
 
 interface CliOptions {
   readonly task: string;
@@ -19,6 +21,7 @@ interface CliOptions {
   readonly idleTimeoutMs: number;
   readonly dontAsk: boolean;
   readonly verbose: boolean;
+  readonly evalMode: boolean;
 }
 
 function parseArgs(argv: readonly string[]): CliOptions {
@@ -26,25 +29,26 @@ function parseArgs(argv: readonly string[]): CliOptions {
   const flags: Record<string, string> = {};
   const positionals: string[] = [];
 
-  const booleanFlags = new Set(["verbose", "v", "help", "h", "dont-ask", "dontAsk"]);
+  const booleanFlags = new Set(["verbose", "v", "help", "h", "dont-ask", "dontAsk", "eval", "e"]);
 
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
 
-    if (!token.startsWith("--")) {
+    if (!token.startsWith("-")) {
       positionals.push(token);
       continue;
     }
 
-    const key = token.slice(2);
+    // Strip leading dashes (--flag or -f)
+    const key = token.startsWith("--") ? token.slice(2) : token.slice(1);
     if (booleanFlags.has(key)) {
       flags[key] = "true";
       continue;
     }
 
     const value = argv[i + 1];
-    if (value === undefined || value.startsWith("--")) {
+    if (value === undefined || value.startsWith("-")) {
       throw new Error(`Missing value for --${key}`);
     }
     flags[key] = value;
@@ -66,6 +70,7 @@ function parseArgs(argv: readonly string[]): CliOptions {
     idleTimeoutMs: Number(flags["idle-timeout"] ?? env.BANKAI_IDLE_TIMEOUT_MS ?? 300000),
     dontAsk: flags["dont-ask"] !== undefined || flags.dontAsk !== undefined,
     verbose: flags.verbose !== undefined || flags.v !== undefined,
+    evalMode: flags.eval !== undefined || flags.e !== undefined,
   };
 }
 
@@ -132,7 +137,7 @@ function buildGatewayConfig(options: CliOptions): GatewayConfig {
   };
 }
 
-export async function main(argv: readonly string[]): Promise<AgentResult> {
+export async function main(argv: readonly string[]): Promise<AgentResult | EvalReport> {
   const options = parseArgs(argv);
   const workingDir = resolve(options.workingDir);
 
@@ -146,7 +151,22 @@ export async function main(argv: readonly string[]): Promise<AgentResult> {
   });
 
   const gatewayConfig = buildGatewayConfig(options);
-  const provider = new GatewayRouter(gatewayConfig);
+
+  // Use Postgres-backed budget tracker if BANKAI_DATABASE_URL is set
+  const dbUrl = process.env.BANKAI_DATABASE_URL;
+  const sessionId = process.env.BANKAI_SESSION_ID ?? `bankai_${Date.now()}`;
+  let asyncBudget: AsyncBudgetTracker | undefined;
+  if (dbUrl !== undefined && dbUrl.length > 0) {
+    asyncBudget = new PostgresBudgetTracker({
+      connectionString: dbUrl,
+      maxUSD: options.maxBudgetUSD,
+      maxTokens: options.maxTokens,
+      sessionId,
+    });
+    telemetry("info", "bankai.budget_postgres", { connectionString: dbUrl });
+  }
+
+  const provider = new GatewayRouter(gatewayConfig, undefined, asyncBudget);
   const toolCatalog = new DefaultCatalog();
 
   // Load skills from the working directory's skills/ folder
@@ -221,15 +241,45 @@ ${skillsSection}`,
       if (decision === "deny") {
         return { decision: "deny" as const, reason: result.reason };
       }
-      // "ask" in headless/dontAsk mode → auto-approve
+      // "ask" in headless mode → auto-approve (dontAsk equivalent)
       if (options.dontAsk) {
         return "allow";
       }
       return { decision: "ask" as const, reason: result.reason };
     },
+    maxToolOutputTokens: 2000,
+    compactionThreshold: options.maxIterations > 10 ? Math.max(10, Math.floor(options.maxIterations / 3)) : 0,
+    compactionPreserveTurns: 10,
   };
 
   const session = new AgentSession(config);
+
+  if (options.evalMode) {
+    const runner = new EvalRunner(defaultEvalCases);
+    const report = await runner.runAll(async (task: string) => {
+      // Fresh session per eval case — no state leakage between cases
+      const evalSession = new AgentSession(config);
+      return await evalSession.run(task);
+    });
+
+    // Emit trace as JSONL to stdout
+    process.stdout.write(runner.toJSONL(report));
+
+    telemetry("info", "bankai.eval_finish", {
+      passRate: report.passRate,
+      passCount: report.passCount,
+      failCount: report.failCount,
+      totalCostUSD: report.totalCostUSD,
+      totalTokens: report.totalTokens,
+    });
+
+    process.exitCode = report.allPassed ? 0 : 1;
+    if (asyncBudget !== undefined && asyncBudget.close !== undefined) {
+      await asyncBudget.close();
+    }
+    return report;
+  }
+
   const result = await session.run(options.task);
 
   // Emit trace as JSONL to stderr
@@ -257,8 +307,12 @@ ${skillsSection}`,
       },
       null,
       2
-    ) + "\n"
-  );
+     ) + "\n"
+   );
+
+  if (asyncBudget !== undefined && asyncBudget.close !== undefined) {
+    await asyncBudget.close();
+  }
 
   return result;
 }

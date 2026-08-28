@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@bankai/core": "workspace:*",
+    "@bankai/evals": "workspace:*",
     "@bankai/gateway": "workspace:*",
     "@bankai/permissions": "workspace:*",
     "@bankai/tools": "workspace:*"

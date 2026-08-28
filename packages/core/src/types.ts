@@ -52,6 +52,12 @@ export interface AgentConfig {
   readonly permissionChecker?: PermissionChecker;
   /** Optional system prompt prefix. If omitted, AGENTS.md is loaded. */
   readonly systemPrompt?: string;
+  /** Phase 10: Cap tool result output length to avoid context bloat. */
+  readonly maxToolOutputTokens?: number;
+  /** Phase 10: Compact messages when total turns exceed this (0 = no auto-compact). */
+  readonly compactionThreshold?: number;
+  /** Phase 10: Number of recent turns to preserve during compaction. */
+  readonly compactionPreserveTurns?: number;
 }
 
 export interface ToolPermissionResult {

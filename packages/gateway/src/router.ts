@@ -8,7 +8,14 @@
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { ModelProvider, ModelRequest, ModelResponse } from "@bankai/core";
-import type { CapabilityAdapter, GatewayConfig, ModelAlias, BudgetTracker, ProviderName } from "./types.js";
+import type {
+  AsyncBudgetTracker,
+  CapabilityAdapter,
+  GatewayConfig,
+  ModelAlias,
+  BudgetTracker,
+  ProviderName,
+} from "./types.js";
 import { OpenAIAdapter } from "./adapters/openai.js";
 import { AnthropicAdapter } from "./adapters/anthropic.js";
 import { InMemoryBudgetTracker } from "./budget.js";
@@ -17,11 +24,13 @@ export class GatewayRouter implements ModelProvider {
   private readonly config: GatewayConfig;
   private readonly adapters: Map<string, CapabilityAdapter>;
   private readonly budget: BudgetTracker;
+  private readonly asyncBudget: AsyncBudgetTracker | undefined;
   private readonly aliasMap: Map<string, ModelAlias>;
 
-  constructor(config: GatewayConfig, budget?: BudgetTracker) {
+  constructor(config: GatewayConfig, budget?: BudgetTracker, asyncBudget?: AsyncBudgetTracker) {
     this.config = config;
     this.budget = budget ?? new InMemoryBudgetTracker(config.budget);
+    this.asyncBudget = asyncBudget;
 
     // Build alias lookup
     this.aliasMap = new Map(config.aliases.map((a) => [a.name, a]));
@@ -47,8 +56,13 @@ export class GatewayRouter implements ModelProvider {
   }
 
   async complete(request: ModelRequest): Promise<ModelResponse> {
-    // Check budget before the call
-    const budgetCheck = this.budget.check();
+    // Check budget before the call (use async tracker if available)
+    let budgetCheck;
+    if (this.asyncBudget !== undefined) {
+      budgetCheck = await this.asyncBudget.check();
+    } else {
+      budgetCheck = this.budget.check();
+    }
     if (budgetCheck.exceeded) {
       throw new Error(`Budget exceeded: ${budgetCheck.reason}`);
     }
@@ -68,8 +82,13 @@ export class GatewayRouter implements ModelProvider {
     // Make the API call with retries
     const response = await this.callWithRetry(alias, adapter, projected, request);
 
-    // Charge the budget
-    this.budget.charge(response.usage, this.estimateCost(alias, response.usage));
+    // Charge the budget (use async tracker if available)
+    const cost = this.estimateCost(alias, response.usage);
+    if (this.asyncBudget !== undefined) {
+      await this.asyncBudget.charge(response.usage, cost);
+    } else {
+      this.budget.charge(response.usage, cost);
+    }
 
     return response;
   }
@@ -226,10 +245,10 @@ export class GatewayRouter implements ModelProvider {
   }
 
   get spentUSD(): number {
-    return this.budget.spentUSD;
+    return this.asyncBudget?.spentUSD ?? this.budget.spentUSD;
   }
 
   get spentTokens(): number {
-    return this.budget.spentTokens;
+    return this.asyncBudget?.spentTokens ?? this.budget.spentTokens;
   }
 }

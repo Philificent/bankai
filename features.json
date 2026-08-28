@@ -58,7 +58,7 @@
     "10": {
       "name": "Advanced features (gated)",
       "status": "in-progress",
-      "description": "Cited repo memory, progressive compaction, per-model profiles"
+      "description": "Postgres budget tracker, progressive compaction, per-model profiles, cited memory"
     }
   },
   "packages": [
@@ -74,12 +74,20 @@
   "testFramework": "node:test",
   "testSuites": {
     "packages/tools": "15 tests",
-    "packages/core": "6 tests (4 loop + 2 skills)",
+    "packages/core": "10 tests (6 loop + 4 skills)",
     "packages/gateway": "8 tests",
     "packages/permissions": "13 tests",
     "packages/verify": "3 tests",
     "packages/evals": "5 tests",
     "packages/graph": "3 tests",
-    "apps/cli": "6 tests"
+    "apps/cli": "8 tests"
+  },
+  "totalTests": 65,
+  "phase10Features": {
+    "postgresBudgetTracker": true,
+    "progressiveCompaction": true,
+    "toolOutputCapping": true,
+    "evalCLIIntegration": true,
+    "shortFlagParsing": true
   }
 }

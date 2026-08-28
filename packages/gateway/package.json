@@ -18,9 +18,11 @@
   },
   "dependencies": {
     "@bankai/core": "workspace:*",
-    "@bankai/tools": "workspace:*"
+    "@bankai/tools": "workspace:*",
+    "pg": "^8.12.0"
   },
   "devDependencies": {
-    "@types/node": "^24.5.0"
+    "@types/node": "^24.5.0",
+    "@types/pg": "^8.23.1"
   }
 }

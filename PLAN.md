@@ -18,7 +18,47 @@
 
 ## Milestone 3: Verification + Evals + Graph
 - [x] packages/verify: pre-completion check pipeline (typecheck, test, lint)
-- [x] packages/evals: JSONL traces, outcome graders
+- [x] packages/evals: JSONL traces, outcome graders, default eval cases
 - [x] packages/graph: typed state graph with checkpointing, subagents, max iterations
 - [x] Tests: verify (3) + evals (5) + graph (3) = 11 new tests
+- [x] Commit + push ✓ (5511ad6)
+
+## Phase 4: Durable Files
+- [x] features.json: machine-readable feature tracking
+- [x] AGENTS.md: enhanced with model aliases, permission stack, tool list
+- [x] PLAN.md: checkpoint plan with validation commands
+- [x] Commit + push ✓ (cde6bde)
+
+## Phase 8: Skills Directory
+- [x] skills/ directory with progressive disclosure skill files
+- [x] packages/core: SkillLoader for skills/ discovery
+- [x] apps/cli: loads skills from working directory
+- [x] Commit + push (cde6bde)
+
+## Milestone 3: Phase 10 Advanced Features
+
+### Postgres Budget Tracker
+- [x] packages/gateway: AsyncBudgetTracker interface
+- [x] packages/gateway: PostgresBudgetTracker with pg, session_id tracking, table schema
+- [x] packages/gateway: GatewayRouter supports async budget tracker
+- [x] apps/cli: auto-detect BANKAI_DATABASE_URL, use PostgresBudgetTracker, close on shutdown
+
+### Progressive Compaction (Phase 10)
+- [x] packages/core: Tool-result capping (maxToolOutputTokens config option)
+- [x] packages/core: Context compaction at task boundaries (compactionThreshold, compactionPreserveTurns)
+- [x] packages/core: Compaction trace entries for observability
+- [x] apps/cli: compaction config wired into AgentConfig
+
+### Eval CLI Integration (Phase 7)
+- [x] apps/cli: --eval/-e flag for running eval suite
+- [x] apps/cli: EvalRunner integration with fresh session per case
+- [x] apps/cli: JSONL trace output to stdout, telemetry to stderr
+- [x] apps/cli: auto-detect BANKAI_DATABASE_URL for persistent budgets
+
+### Tests
+- [x] Core: tool output capping (1 test)
+- [x] Core: progressive compaction (1 test)
+- [x] CLI: --eval/-e flag parsing (3 tests), short-flag support (1 test)
+- [x] Total: 65 tests across 8 packages, 0 failures
+
 - [ ] Commit + push
