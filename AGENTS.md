@@ -21,3 +21,8 @@ Bankai owns the agent loop. The model is a swappable engine. These rules are alw
 - `skills/` — progressive disclosure skill files.
 - `AGENTS.md` — this file, short constitution.
 - `PLAN.md` — checkpoint plan with validation commands.
+
+## Available Skills
+- `project-analysis` — understand codebases (module discovery, data flow)
+- `test-writer` — write tests that fail before the fix (edge cases, not just happy path)
+- `refactor` — improve code structure without changing behavior

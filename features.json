@@ -1,0 +1,85 @@
+{
+  "project": "bankai",
+  "description": "The ultimate agent harness — owns the loop, swaps the model",
+  "buildOrder": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "phases": {
+    "1": {
+      "name": "Loop you own",
+      "status": "complete",
+      "package": "packages/core",
+      "description": "ReAct agent loop with max_iterations, max_budget, idle_timeout caps"
+    },
+    "2": {
+      "name": "Canonical tools",
+      "status": "complete",
+      "package": "packages/tools",
+      "description": "bash, file_read, file_edit, code_exec sandbox"
+    },
+    "3": {
+      "name": "Capability adapter + gateway",
+      "status": "complete",
+      "package": "packages/gateway",
+      "description": "OpenAI + Anthropic tool projection, thinking block preservation, GatewayRouter with retry/budget"
+    },
+    "4": {
+      "name": "Durable files",
+      "status": "complete",
+      "description": "AGENTS.md constitution, PLAN.md, features.json, git checkpoints"
+    },
+    "5": {
+      "name": "Permission stack",
+      "status": "complete",
+      "package": "packages/permissions",
+      "description": "Deny/ask/allow rules, bash deny patterns, dontAsk headless mode"
+    },
+    "6": {
+      "name": "Verification",
+      "status": "complete",
+      "package": "packages/verify",
+      "description": "Pre-completion hooks (typecheck, test, lint)"
+    },
+    "7": {
+      "name": "Eval harness",
+      "status": "complete",
+      "package": "packages/evals",
+      "description": "JSONL traces, outcome graders"
+    },
+    "8": {
+      "name": "Skills directory",
+      "status": "complete",
+      "description": "skills/ with progressive disclosure, SkillLoader in core"
+    },
+    "9": {
+      "name": "State graph + subagents",
+      "status": "complete",
+      "package": "packages/graph",
+      "description": "Typed state graph with checkpointing, max iterations"
+    },
+    "10": {
+      "name": "Advanced features (gated)",
+      "status": "in-progress",
+      "description": "Cited repo memory, progressive compaction, per-model profiles"
+    }
+  },
+  "packages": [
+    "packages/tools",
+    "packages/core",
+    "packages/gateway",
+    "packages/permissions",
+    "packages/verify",
+    "packages/evals",
+    "packages/graph",
+    "apps/cli"
+  ],
+  "testFramework": "node:test",
+  "testSuites": {
+    "packages/tools": "15 tests",
+    "packages/core": "6 tests (4 loop + 2 skills)",
+    "packages/gateway": "8 tests",
+    "packages/permissions": "13 tests",
+    "packages/verify": "3 tests",
+    "packages/evals": "5 tests",
+    "packages/graph": "3 tests",
+    "apps/cli": "6 tests"
+  }
+}

@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AgentSession, type AgentConfig, type AgentResult } from "@bankai/core";
+import { AgentSession, type AgentConfig, type AgentResult, SkillLoader } from "@bankai/core";
 import { DefaultCatalog, type ToolCall } from "@bankai/tools";
 import { GatewayRouter } from "@bankai/gateway";
 import type { GatewayConfig, ModelAlias } from "@bankai/gateway";
@@ -149,9 +149,13 @@ export async function main(argv: readonly string[]): Promise<AgentResult> {
   const provider = new GatewayRouter(gatewayConfig);
   const toolCatalog = new DefaultCatalog();
 
-  telemetry("info", "bankai.provider", {
-    providerType: "gateway",
-    aliases: gatewayConfig.aliases.map((a) => a.name),
+  // Load skills from the working directory's skills/ folder
+  const skillsDir = resolve(workingDir, "skills");
+  const skillLoader = new SkillLoader(skillsDir);
+  const availableSkills = await skillLoader.list();
+
+  telemetry("info", "bankai.skills", {
+    available: availableSkills.map((s) => s.name),
   });
 
   // Create AGENTS.md if it doesn't exist so the constitution loads
@@ -159,10 +163,30 @@ export async function main(argv: readonly string[]): Promise<AgentResult> {
   try {
     await readFile(agentsPath, "utf8");
   } catch {
+    const skillsSection = availableSkills.length > 0
+      ? `\n\n## Available Skills\n${availableSkills.map((s) => `- **${s.name}**: ${s.description}`).join("\n")}\n`
+      : "";
     await mkdir(workingDir, { recursive: true });
     await writeFile(
       agentsPath,
-      "# Bankai — Project Constitution\n\nAdd project-specific conventions here.\n",
+      `# Bankai — Project Constitution
+
+## Model Aliases
+- \`coding-primary\`: Claude 3.5 Sonnet (Anthropic) — use for coding tasks
+- \`cheap-compact\`: GPT-4o-mini (OpenAI) — use for critique and compact tasks
+- \`gpt-4o\`: GPT-4o (OpenAI) — direct OpenAI access
+
+## Permission Stack
+- Deny rules run as code before any tool executes (rm -rf, curl, chmod 777, etc.)
+- Safe tools (ls, grep, file_read, code_exec) are auto-allowed in headless mode
+- file_edit requires approval; use --dont-ask for headless operation
+
+## Available Tools
+- \`bash\`: Shell command execution
+- \`file_read\`: Read files within the working directory
+- \`file_edit\`: Create, replace, or delete files
+- \`code_exec\`: Execute code in a sandboxed environment
+${skillsSection}`,
       "utf8"
     );
   }
