@@ -70,3 +70,8 @@
 - [x] Total: 68 tests across 8 packages, 0 failures
 
 - [x] Commit + push ✓ (40d76b2)
+
+## Future Work (Post-MVP)
+- [ ] Phase 11: Interactive/TUI mode — streaming agent output with live tool calls
+- [ ] Phase 12: Multi-agent collaboration (subagent spawning, result aggregation)
+- [ ] Phase 13: Web UI dashboard for budget tracking and trace inspection
