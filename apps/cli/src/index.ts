@@ -25,6 +25,34 @@ interface CliOptions {
   readonly sandbox: boolean;
 }
 
+function printHelp(): void {
+  const help = `Bankai — the ultimate agent harness
+
+Usage: bankai [options] "<task description>"
+
+Options:
+  --eval, -e          Run the built-in eval suite instead of a single task
+  --sandbox, -s       Run code_exec in a Docker container (workspace-write, no network)
+  --model <name>       Model alias (default: coding-primary)
+  --working-dir <dir>  Working directory (default: cwd)
+  --max-iterations <n>  Max tool-call iterations (default: 50)
+  --max-tokens <n>     Total token budget (default: 100000)
+  --max-budget <usd>   Max USD budget (default: 10)
+  --idle-timeout <ms>  Idle timeout in ms (default: 300000)
+  --verbose, -v        Enable verbose output
+  --dont-ask, --dontAsk  Auto-approve all tool calls (headless mode)
+  --help, -h           Show this help message
+
+Environment:
+  BANKAI_DATABASE_URL    Postgres connection for persistent budget tracking
+  BANKAI_SESSION_ID      Session ID for budget tracking (default: bankai_<timestamp>)
+  BANKAI_MODEL           Override default model alias
+  BANKAI_ANTHROPIC_API_KEY  Anthropic API key
+  BANKAI_OPENAI_API_KEY     OpenAI API key
+`;
+  process.stdout.write(help);
+}
+
 function parseArgs(argv: readonly string[]): CliOptions {
   const env = process.env;
   const flags: Record<string, string> = {};
@@ -150,6 +178,12 @@ function buildGatewayConfig(options: CliOptions): GatewayConfig {
 }
 
 export async function main(argv: readonly string[]): Promise<AgentResult | EvalReport> {
+  // Check for --help before parsing args (help doesn't require a task)
+  if (argv.includes("--help") || argv.includes("-h")) {
+    printHelp();
+    return { stopReason: "done", output: "", usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, totalCostUSD: 0 }, iterations: 0, trace: [] } as AgentResult;
+  }
+
   const options = parseArgs(argv);
   const workingDir = resolve(options.workingDir);
 

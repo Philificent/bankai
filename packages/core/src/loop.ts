@@ -108,7 +108,7 @@ export class AgentSession {
    * turns for active context. Triggered when turn count exceeds
    * compactionThreshold (Phase 10).
    */
-  private compactMessages(): void {
+  compact(): void {
     const threshold = this.config.compactionThreshold ?? 0;
     if (threshold <= 0 || this.messages.length <= threshold) {
       return;
@@ -223,7 +223,7 @@ export class AgentSession {
       await this.executeToolCalls(toolCalls);
 
       // Progressive compaction: compact if turn count exceeds threshold
-      this.compactMessages();
+      this.compact();
 
       // Check idle timeout after tool execution
       const idleStop = this.checkIdle();
@@ -240,6 +240,22 @@ export class AgentSession {
     };
 
     for (const call of calls) {
+      // Agent-called compact tool: trigger progressive compaction directly
+      if (call.name === "compact") {
+        this.compact();
+        this.messages.push({
+          role: "tool",
+          toolCallId: call.id,
+          content: "[compaction performed — earlier context summarized]",
+        });
+        this.appendTrace({
+          type: "tool_result",
+          at: new Date().toISOString(),
+          data: { toolCallId: call.id, toolName: "compact" },
+        });
+        continue;
+      }
+
       const tool = this.config.tools.get(call.name);
       if (tool === undefined) {
         this.messages.push({
