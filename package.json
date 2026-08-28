@@ -1,0 +1,12 @@
+{
+  "name": "bankai",
+  "version": "0.1.0",
+  "description": "The ultimate coding agent harness — owns the loop, swaps the model",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.23.0",
+  "devDependencies": {
+    "@types/node": "^24.5.0",
+    "typescript": "^5.9.2"
+  }
+}
