@@ -69,4 +69,4 @@
 - [x] CLI: --eval/-e flag parsing (3 tests), --sandbox/-s flag parsing (3 tests), total 10
 - [x] Total: 68 tests across 8 packages, 0 failures
 
-- [ ] Commit + push
+- [x] Commit + push ✓ (40d76b2)
