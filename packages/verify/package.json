@@ -20,6 +20,6 @@
     "@bankai/tools": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24.5.0"
+    "@types/node": "^26.6.5"
   }
 }
